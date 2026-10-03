@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planificador Diario Inteligente y Estricto</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+    }
+    .pulse-glow {
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+      animation: pulse 2s infinite alternate;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 10px rgba(56, 189, 248, 0.3); }
+      100% { box-shadow: 0 0 22px rgba(56, 189, 248, 0.7); }
+    }
+    .blackout-card {
+      background: linear-gradient(135deg, #1e1b4b 0%, #311042 100%);
+      border: 1px solid #7c3aed;
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-12">
+
+  <header class="bg-slate-900/90 backdrop-blur sticky top-0 z-50 border-b border-slate-800 px-4 py-3 shadow-md">
+    <div class="max-w-3xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
+      <div>
+        <h1 class="text-xl font-bold bg-gradient-to-r from-sky-400 to-indigo-400 bg-clip-text text-transparent">
+          ⚡ Planificador Inteligente
+        </h1>
+        <p class="text-xs text-slate-400 flex items-center gap-1.5">
+          <span>Sincronizado con la hora de tu dispositivo</span>
+          <span id="syncStatus" class="text-emerald-400 font-semibold ml-2">☁️ Conectando...</span>
+        </p>
+      </div>
+      <div class="text-center sm:text-right">
+        <div id="liveClock" class="text-2xl font-mono font-bold text-sky-400">00:00:00</div>
+        <div id="liveDate" class="text-xs text-slate-400">Cargando fecha...</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-3xl mx-auto px-4 mt-6 space-y-6">
+
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <!-- Stats Box -->
+      <div class="bg-slate-800/80 border border-slate-700 rounded-xl p-4 flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-medium text-slate-300">Progreso Diario</span>
+          <span id="streakDisplay" class="text-amber-400 font-bold text-sm">🔥 Racha: 0 Días</span>
+        </div>
+        <div class="mt-2">
+          <div class="flex justify-between text-xs mb-1">
+            <span id="levelDisplay" class="text-sky-400 font-semibold">Nivel 1</span>
+            <span id="xpDisplay" class="text-slate-400">0 / 100 XP</span>
+          </div>
+          <div class="w-full bg-slate-700 h-2.5 rounded-full overflow-hidden">
+            <div id="xpBar" class="bg-gradient-to-r from-sky-500 to-emerald-400 h-full w-0 transition-all duration-500"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Outage / Blackout Warning Box -->
+      <div class="blackout-card rounded-xl p-4 flex flex-col justify-between text-slate-100">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase tracking-wider text-purple-300">💡 Corte Eléctrico (6:00 PM)</span>
+          <span class="text-xs bg-purple-900/60 text-purple-200 px-2 py-0.5 rounded border border-purple-500/30">Inflexible</span>
+        </div>
+        <div class="mt-2">
+          <div id="blackoutCountdown" class="text-lg font-mono font-bold text-amber-300">Calculando...</div>
+          <p class="text-xs text-purple-200/80 mt-1" id="blackoutStatus">Sin energía de 6:00 PM a 12:00 AM</p>
+        </div>
+      </div>
+
+      <!-- Controls & Strict Mode Panel -->
+      <div class="bg-slate-800/80 border border-slate-700 rounded-xl p-4 flex flex-col justify-between space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-sm font-medium text-slate-200">Modo Estricto</span>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="strictModeToggle" class="sr-only peer" checked onchange="toggleStrictMode()">
+            <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+          </label>
+        </div>
+        <div class="flex items-center justify-between gap-2">
+          <button onclick="requestNotificationPermission()" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-600 transition flex items-center gap-1">
+            🔔 Activar Alarmas
+          </button>
+          <button onclick="resetDayTasks()" class="text-xs bg-indigo-600/80 hover:bg-indigo-500 text-white px-2.5 py-1.5 rounded-lg transition font-medium">
+            🔄 Reiniciar Día
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section id="activeTaskBanner" class="hidden bg-gradient-to-r from-sky-900/80 via-slate-800 to-indigo-900/80 border border-sky-500/50 rounded-xl p-4 pulse-glow">
+      <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+        <div>
+          <span class="bg-sky-500/20 text-sky-300 text-xs font-bold px-2.5 py-0.5 rounded-full border border-sky-400/30 uppercase tracking-wider">
+            ▶️ EN CURSO AHORA
+          </span>
+          <h2 id="activeTaskTitle" class="text-lg font-bold text-white mt-1">Nombre de la actividad</h2>
+          <p id="activeTaskTime" class="text-xs text-sky-200">00:00 - 00:00</p>
+        </div>
+        <div class="text-left sm:text-right">
+          <span class="text-xs text-slate-400 block">Tiempo Restante:</span>
+          <span id="activeTaskCountdown" class="text-2xl font-mono font-bold text-emerald-400">00:00:00</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="bg-slate-800/80 border border-slate-700 rounded-xl p-4">
+      <h3 class="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+        <span>➕ Agregar Tarea o Imprevisto</span>
+      </h3>
+      <form id="newTaskForm" onsubmit="addNewTask(event)" class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+        <input type="text" id="inputTitle" placeholder="Título (ej: Ejercicio / Revisar Router)" required class="sm:col-span-5 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
+        <input type="time" id="inputStart" required class="sm:col-span-2 bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
+        <input type="time" id="inputEnd" required class="sm:col-span-2 bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
+        <select id="inputCategory" class="sm:col-span-3 bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
+          <option value="pasantia">💼 Pasantía</option>
+          <option value="proyecto">💻 Proyecto Redes</option>
+          <option value="ejercicio">🏋️ Ejercicio</option>
+          <option value="corte">💡 Corte / Descanso</option>
+          <option value="imprevisto">🟡 Imprevisto / Otro</option>
+        </select>
+        <button type="submit" class="sm:col-span-12 bg-sky-600 hover:bg-sky-500 text-white font-medium py-2 rounded-lg text-sm transition">
+          Guardar Actividad
+        </button>
+      </form>
+    </section>
+
+    <section class="space-y-3">
+      <div class="flex justify-between items-center">
+        <h3 class="text-sm font-semibold text-slate-300 uppercase tracking-wider">Cronograma del Día</h3>
+        <span class="text-xs text-slate-400">Haz clic en 📝 para editar notas fijas</span>
+      </div>
+      <div id="taskListContainer" class="space-y-3">
+        <!-- Dynamic Tasks Rendered Here -->
+      </div>
+    </section>
+
+    <section class="bg-slate-800/80 border border-slate-700 rounded-xl p-4">
+      <h3 class="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2">
+        <span>📜 Historial de Actividades Completadas</span>
+      </h3>
+      <ul id="historyList" class="space-y-1.5 text-xs text-slate-400 max-h-40 overflow-y-auto pr-1">
+        <li class="italic text-slate-500">Aún no se han completado actividades hoy.</li>
+      </ul>
+    </section>
+
+  </main>
+
+  <script type="module">
+    // Importación de módulos de Firebase SDK v10/v12
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
+    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    // Tu configuración exacta de Firebase Web App
+    const firebaseConfig = {
+      apiKey: "AIzaSyCKPNJQg-Xry6MycfA7XGI3ZIPQNSzux04",
+      authDomain: "planificador-diario-452cc.firebaseapp.com",
+      projectId: "planificador-diario-452cc",
+      storageBucket: "planificador-diario-452cc.firebasestorage.app",
+      messagingSenderId: "982883809367",
+      appId: "1:982883809367:web:3ca93e2e81dee6760b8b12",
+      measurementId: "G-S4S1D8RRDW"
+    };
+
+    // Inicializar Firebase y Firestore
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const db = getFirestore(app);
+    const docRef = doc(db, "planificador", "mi_rutina");
+
+    // System Audio Beep Generator (No external dependencies)
+    function playBeep(freq = 880, duration = 0.2) {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) {
+        console.log("Audio play blocked by browser policy until user interacts.");
+      }
+    }
+
+    // Default Schedule based on user routine
+    const defaultSchedule = [
+      { id: '1', title: 'Preparación y Traslado', start: '05:30', end: '07:00', category: 'pasantia', done: false, notes: 'Despertar, aseo personal, desayuno.' },
+      { id: '2', title: 'Pasantías', start: '07:00', end: '15:30', category: 'pasantia', done: false, notes: 'Cumplir horario laboral en la pasantía.' },
+      { id: '3', title: 'Regreso y Merienda', start: '15:30', end: '16:00', category: 'corte', done: false, notes: 'Regresar a casa y descansar brevemente.' },
+      { id: '4', title: 'Proyecto de Redes (Fase Online)', start: '16:00', end: '17:00', category: 'proyecto', done: false, notes: 'Aprovechar luz e internet. Descargar PDFs y documentación.' },
+      { id: '5', title: 'Ejercicio Físico', start: '17:00', end: '18:00', category: 'ejercicio', done: false, notes: 'Rutina de hoy: Pecho y Tríceps / Calistenia.' },
+      { id: '6', title: 'Ducha y Cena (Inicio Corte 6 PM)', start: '18:00', end: '18:30', category: 'corte', done: false, notes: 'Aseo personal con linterna / cenar temprano.' },
+      { id: '7', title: 'Lectura / Estudio Offline', start: '18:30', end: '20:30', category: 'proyecto', done: false, notes: 'Repasar teoría de redes descargada en el teléfono.' },
+      { id: '8', title: 'Descanso Nocturno', start: '20:30', end: '23:59', category: 'corte', done: false, notes: 'Dormir temprano para estar activo a las 5:30 AM.' }
+    ];
+
+    const categoryStyles = {
+      pasantia: { border: 'border-sky-500', bg: 'bg-sky-500/10', text: 'text-sky-400', badge: '💼 Pasantía' },
+      proyecto: { border: 'border-purple-500', bg: 'bg-purple-500/10', text: 'text-purple-400', badge: '💻 Proyecto' },
+      ejercicio: { border: 'border-emerald-500', bg: 'bg-emerald-500/10', text: 'text-emerald-400', badge: '🏋️ Ejercicio' },
+      corte: { border: 'border-amber-500', bg: 'bg-amber-500/10', text: 'text-amber-400', badge: '💡 Corte / Descanso' },
+      imprevisto: { border: 'border-rose-500', bg: 'bg-rose-500/10', text: 'text-rose-400', badge: '🟡 Imprevisto' }
+    };
+
+    // State Variables
+    let tasks = JSON.parse(localStorage.getItem('strict_tasks')) || defaultSchedule;
+    let xp = parseInt(localStorage.getItem('strict_xp')) || 0;
+    let streak = parseInt(localStorage.getItem('strict_streak')) || 0;
+    let strictMode = localStorage.getItem('strict_mode') !== 'false';
+    let history = JSON.parse(localStorage.getItem('strict_history')) || [];
+    let notifiedTasks = new Set();
+
+    // Guardar en la nube y en almacenamiento local
+    async function saveData() {
+      localStorage.setItem('strict_tasks', JSON.stringify(tasks));
+      localStorage.setItem('strict_xp', xp.toString());
+      localStorage.setItem('strict_streak', streak.toString());
+      localStorage.setItem('strict_mode', strictMode.toString());
+      localStorage.setItem('strict_history', JSON.stringify(history));
+
+      try {
+        await setDoc(docRef, {
+          tasks,
+          xp,
+          streak,
+          strictMode,
+          history
+        });
+        const syncEl = document.getElementById('syncStatus');
+        if (syncEl) {
+          syncEl.innerText = '☁️ Sincronizado';
+          syncEl.className = 'text-emerald-400 font-semibold ml-2';
+        }
+      } catch (e) {
+        console.error("Error al sincronizar con Firebase:", e);
+        const syncEl = document.getElementById('syncStatus');
+        if (syncEl) {
+          syncEl.innerText = '⚠️ Modo Offline';
+          syncEl.className = 'text-amber-400 font-semibold ml-2';
+        }
+      }
+    }
+
+    // Escuchar actualizaciones en tiempo real desde Firebase
+    onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        tasks = data.tasks || tasks;
+        xp = data.xp !== undefined ? data.xp : xp;
+        streak = data.streak !== undefined ? data.streak : streak;
+        strictMode = data.strictMode !== undefined ? data.strictMode : strictMode;
+        history = data.history || history;
+
+        const syncEl = document.getElementById('syncStatus');
+        if (syncEl) {
+          syncEl.innerText = '☁️ Sincronizado';
+          syncEl.className = 'text-emerald-400 font-semibold ml-2';
+        }
+
+        renderStats();
+        renderTasks();
+        renderHistory();
+      }
+    });
+
+    function requestNotificationPermission() {
+      if ('Notification' in window) {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            alert('¡Notificaciones activadas con éxito!');
+          }
+        });
+      } else {
+        alert('Este navegador no soporta notificaciones de escritorio.');
+      }
+    }
+
+    function timeToMinutes(timeStr) {
+      const [h, m] = timeStr.split(':').map(Number);
+      return h * 60 + m;
+    }
+
+    function formatSeconds(sec) {
+      if (sec < 0) sec = 0;
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+
+    function toggleStrictMode() {
+      strictMode = document.getElementById('strictModeToggle').checked;
+      saveData();
+      renderTasks();
+    }
+
+    function updateEngine() {
+      const now = new Date();
+      
+      // Update Live Clock
+      document.getElementById('liveClock').innerText = now.toLocaleTimeString();
+      document.getElementById('liveDate').innerText = now.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'short' });
+
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const currentSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+
+      // Blackout Countdown (6:00 PM -> 18:00)
+      const blackoutSeconds = 18 * 3600;
+      const blackoutEndSeconds = 24 * 3600;
+      const blackoutCountdownEl = document.getElementById('blackoutCountdown');
+      const blackoutStatusEl = document.getElementById('blackoutStatus');
+
+      if (currentSeconds < blackoutSeconds) {
+        const diff = blackoutSeconds - currentSeconds;
+        blackoutCountdownEl.innerText = formatSeconds(diff);
+        blackoutStatusEl.innerText = "Luz activa. Prepárate para el corte a las 6:00 PM.";
+      } else if (currentSeconds >= blackoutSeconds && currentSeconds < blackoutEndSeconds) {
+        blackoutCountdownEl.innerText = "⚡ EN CORTE";
+        blackoutStatusEl.innerText = "Actualmente sin energía eléctrica hasta medianoche.";
+      }
+
+      // Check Active Task
+      let activeTask = null;
+      tasks.forEach(task => {
+        const startMin = timeToMinutes(task.start);
+        const endMin = timeToMinutes(task.end);
+
+        // Check if task is active right now
+        if (currentMinutes >= startMin && currentMinutes < endMin) {
+          activeTask = task;
+        }
+
+        // Notification Check (1 min before or at start)
+        const diffSeconds = (startMin * 60) - currentSeconds;
+        if ((diffSeconds === 60 || diffSeconds === 0) && !notifiedTasks.has(task.id + '_' + diffSeconds)) {
+          notifiedTasks.add(task.id + '_' + diffSeconds);
+          playBeep(1000, 0.4);
+          if (Notification.permission === 'granted') {
+            new Notification(`⏰ Planificador: ${task.title}`, {
+              body: diffSeconds === 60 ? `Falta 1 minuto para comenzar esta actividad.` : `¡Inicia la actividad ahora! (${task.start} - ${task.end})`
+            });
+          }
+        }
+      });
+
+      // Update Banner for Active Task
+      const banner = document.getElementById('activeTaskBanner');
+      if (activeTask) {
+        banner.classList.remove('hidden');
+        document.getElementById('activeTaskTitle').innerText = activeTask.title;
+        document.getElementById('activeTaskTime').innerText = `${activeTask.start} - ${activeTask.end}`;
+        const endSec = timeToMinutes(activeTask.end) * 60;
+        const remainingSec = endSec - currentSeconds;
+        document.getElementById('activeTaskCountdown').innerText = formatSeconds(remainingSec);
+      } else {
+        banner.classList.add('hidden');
+      }
+
+      // Refresh task highlighting live
+      highlightActiveTasksInList(currentMinutes);
+    }
+
+    function highlightActiveTasksInList(currentMinutes) {
+      tasks.forEach(task => {
+        const card = document.getElementById(`task-card-${task.id}`);
+        if (!card) return;
+        const startMin = timeToMinutes(task.start);
+        const endMin = timeToMinutes(task.end);
+
+        if (currentMinutes >= startMin && currentMinutes < endMin) {
+          card.classList.add('ring-2', 'ring-sky-400', 'bg-sky-950/30');
+          const badge = document.getElementById(`active-badge-${task.id}`);
+          if (badge) badge.classList.remove('hidden');
+        } else {
+          card.classList.remove('ring-2', 'ring-sky-400', 'bg-sky-950/30');
+          const badge = document.getElementById(`active-badge-${task.id}`);
+          if (badge) badge.classList.add('hidden');
+        }
+      });
+    }
+
+    function toggleTask(id) {
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const task = tasks.find(t => t.id === id);
+
+      if (!task) return;
+
+      // Strict mode check
+      if (strictMode && !task.done) {
+        const startMin = timeToMinutes(task.start);
+        if (currentMinutes < startMin) {
+          playBeep(300, 0.3);
+          alert(`🚫 MODO ESTRICTO ACTIVO: No puedes marcar la tarea "${task.title}" antes de su hora de inicio (${task.start}).`);
+          renderTasks();
+          return;
+        }
+      }
+
+      task.done = !task.done;
+      if (task.done) {
+        xp += 25;
+        playBeep(1200, 0.2);
+        const log = `${now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${task.title}`;
+        history.unshift(log);
+      } else {
+        xp = Math.max(0, xp - 25);
+      }
+
+      checkDailyStreak();
+      saveData();
+      renderStats();
+      renderTasks();
+      renderHistory();
+    }
+
+    function checkDailyStreak() {
+      const allCompleted = tasks.length > 0 && tasks.every(t => t.done);
+      if (allCompleted) {
+        streak += 1;
+        playBeep(1500, 0.5);
+        alert('🎉 ¡EXCELENTE TRABAJO! Has completado todas las actividades planificadas para hoy. ¡Tu racha ha aumentado!');
+      }
+    }
+
+    function updateNotes(id, text) {
+      const task = tasks.find(t => t.id === id);
+      if (task) {
+        task.notes = text;
+        saveData();
+      }
+    }
+
+    function toggleNotesBox(id) {
+      const el = document.getElementById(`notes-box-${id}`);
+      if (el) el.classList.toggle('hidden');
+    }
+
+    function deleteTask(id) {
+      tasks = tasks.filter(t => t.id !== id);
+      saveData();
+      renderTasks();
+    }
+
+    function addNewTask(event) {
+      event.preventDefault();
+      const title = document.getElementById('inputTitle').value;
+      const start = document.getElementById('inputStart').value;
+      const end = document.getElementById('inputEnd').value;
+      const category = document.getElementById('inputCategory').value;
+
+      const newTask = {
+        id: Date.now().toString(),
+        title,
+        start,
+        end,
+        category,
+        done: false,
+        notes: ''
+      };
+
+      tasks.push(newTask);
+      // Sort tasks chronologically
+      tasks.sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+
+      saveData();
+      renderTasks();
+
+      // Clear Form inputs
+      document.getElementById('inputTitle').value = '';
+      document.getElementById('inputStart').value = '';
+      document.getElementById('inputEnd').value = '';
+    }
+
+    function resetDayTasks() {
+      if (confirm('¿Quieres reiniciar todas las casillas del día? Se conservarán tus notas, nivel y racha.')) {
+        tasks.forEach(t => t.done = false);
+        saveData();
+        renderTasks();
+      }
+    }
+
+    function renderStats() {
+      const level = Math.floor(xp / 100) + 1;
+      const currentXP = xp % 100;
+      document.getElementById('streakDisplay').innerText = `🔥 Racha: ${streak} Días`;
+      document.getElementById('levelDisplay').innerText = `Nivel ${level}`;
+      document.getElementById('xpDisplay').innerText = `${currentXP} / 100 XP`;
+      document.getElementById('xpBar').style.width = `${currentXP}%`;
+      document.getElementById('strictModeToggle').checked = strictMode;
+    }
+
+    function renderTasks() {
+      const container = document.getElementById('taskListContainer');
+      container.innerHTML = '';
+
+      tasks.forEach(task => {
+        const style = categoryStyles[task.category] || categoryStyles.imprevisto;
+        const card = document.createElement('div');
+        card.id = `task-card-${task.id}`;
+        card.className = `bg-slate-800/90 border-l-4 ${style.border} border-y border-r border-slate-700/60 rounded-xl p-3.5 transition-all`;
+
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs font-semibold px-2 py-0.5 rounded ${style.bg} ${style.text}">${style.badge}</span>
+                <span id="active-badge-${task.id}" class="hidden text-xs bg-sky-500 text-slate-950 font-bold px-2 py-0.5 rounded-full animate-pulse">
+                  EN CURSO
+                </span>
+                <span class="text-xs font-mono text-slate-400">⏱ ${task.start} - ${task.end}</span>
+              </div>
+              <h4 class="font-bold text-slate-100 text-base mt-1 ${task.done ? 'line-through text-slate-500' : ''}">
+                ${task.title}
+              </h4>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="toggleNotesBox('${task.id}')" title="Editar Notas" class="text-slate-400 hover:text-sky-400 p-1 text-sm">
+                📝
+              </button>
+              <input type="checkbox" ${task.done ? 'checked' : ''} onchange="toggleTask('${task.id}')" class="w-5 h-5 rounded bg-slate-900 border-slate-600 text-emerald-500 focus:ring-emerald-500 cursor-pointer">
+              <button onclick="deleteTask('${task.id}')" title="Eliminar" class="text-slate-500 hover:text-rose-400 p-1 text-xs">
+                ❌
+              </button>
+            </div>
+          </div>
+
+          <!-- Collapsible Notes Input -->
+          <div id="notes-box-${task.id}" class="mt-3 hidden">
+            <textarea onchange="updateNotes('${task.id}', this.value)" placeholder="Añade notas personalizadas (ej. detalles de ejercicios, páginas o topología de red)..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-slate-200 focus:outline-none focus:border-sky-500 h-16 resize-y">${task.notes || ''}</textarea>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function renderHistory() {
+      const list = document.getElementById('historyList');
+      if (history.length === 0) {
+        list.innerHTML = '<li class="italic text-slate-500">Aún no se han completado actividades hoy.</li>';
+        return;
+      }
+      list.innerHTML = history.slice(0, 10).map(item => `<li class="flex items-center gap-2"><span class="text-emerald-400">✓</span> ${item}</li>`).join('');
+    }
+
+    // Exponer funciones necesarias al scope global para eventos onclick/onsubmit HTML
+    window.toggleStrictMode = toggleStrictMode;
+    window.requestNotificationPermission = requestNotificationPermission;
+    window.resetDayTasks = resetDayTasks;
+    window.addNewTask = addNewTask;
+    window.toggleTask = toggleTask;
+    window.deleteTask = deleteTask;
+    window.toggleNotesBox = toggleNotesBox;
+    window.updateNotes = updateNotes;
+
+    window.onload = function () {
+      renderStats();
+      renderTasks();
+      renderHistory();
+      
+      // Run engine immediately and update every second
+      updateEngine();
+      setInterval(updateEngine, 1000);
+    };
+  </script>
+</body>
+</html>
